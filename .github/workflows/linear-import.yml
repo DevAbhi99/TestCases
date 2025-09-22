@@ -10,7 +10,7 @@ jobs:
     env:
       LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}   # Add in Repo → Settings → Secrets → Actions
       LINEAR_TEAM_KEY: INT                            # Change if your team key isn’t INT (e.g., QA, WEB)
-      CSV_GLOB: "testcases/*.csv"                     # Or set to "**/*.csv" to search repo-wide
+      CSV_GLOB: "**/*.csv"                      # Or set to "**/*.csv" to search repo-wide
 
     steps:
       - name: Checkout
