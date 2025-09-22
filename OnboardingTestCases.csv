@@ -1,56 +1,9 @@
-,,,,,,,,,
-,,,,,,,,,
-Title,Test Scenario,Test Case,Preconditions,Test Steps,Test Data,Expected Result,Actual Result,Approach,Status
-1,To test the Signup functionality,tc01 Signup with empty inputs fields empty,The user is on the signup page of Finely,"1) Leave all fields empty
-2) check privacy policy and terms and conditions checkboxes
-3) Click on signup",N/A,Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
-,,tc02_Signup with leaving any one field empty,The user is on the signup page of Finely,"1) Fill all fields and leave email field empty
-2) check privacy policy and terms and conditions checkboxes
-3) Click on signup",,Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
-,,tc03_Signup with unchecking check boxes,The user is on the signup page of Finely,"1) Fill all fields 
-2) Leave privacy policy and terms and conditions empty
-3) Click on signup",,Error message "Please check the check box if you want to proceed" comes up,Error message "Please check the check box if you want to proceed" comes up,Automated,
-,,tc04_Signup with with weak password,The user is on the signup page of Finely,"1) Fill all fields with valid inputs
-2) Fill the password and confirm password with a password of length 4
-3) check privacy policy and terms and conditions empty
-4) Click on signup""","""abcd""",Error message "Password did not conform with policy: Password not long enough",Error message "Password did not conform with policy: Password not long enough",Automated,
-,,"tc05_Signup with inputs in password and confirm 
-password fields not matching with each other",The user is on the signup page of Finely,"1) Fill all fields with valid inputs
-2) Fill the password and confirm password such that both the inputs should not match
-3) check privacy policy and terms and conditions empty
-4) Click on signup","password: ""abcd@123456""
-confirm password: ""abc@123456""
-",Error message "Passwords do not match" comes up,Error message "Passwords do not match" comes up,Automated,
-,,tc06_Signup with invalid email format,The user is on the signup page of Finely,"1) Fill email field with incorrect email format
-2) Fill rest of the fields with valid input
-3) check privacy policy and terms and conditions empty
-4) Click on signup""","""abc,sdd""
-""abc.com""
-""abcd@com""",Error message prompting to put the correct email shows up,Error message prompting to put the correct email shows up,Automated,
-,,tc07_Signup with with valid inputs,The user is on the signup page of Finely,"1) Fill all the fields with correct inputs
-2) check privacy policy and terms and conditions empty
-3) Click on signup""","email: ""abhigyan.khaund@narrative.com""
-password: ""Abhi@/1234""
-Confirm password"": ""Abhi@/1234""
-Name: ""Abhigyan""
-Last name: ""Khaund""
-Business name:- ""finley""",User should be navigated to the Welcome page,User should be navigated to the Welcome page,Automated,
-2,To test Verification code page,tc08_Test with empty verification input,The user should have already signed up,"1) Leave the verification code field empty
-2) 2) Click on Verify button
-","email: ""abhigyan.khaund@narrative.com""
-password: ""Abhi@/1234""
-Confirm password"": ""Abhi@/1234""
-Name: ""Abhigyan""
-Last name: ""Khaund""
-Business name:- ""finley""
-Verification Code : N/A",Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
-,,tc09_Testing with incorrect verification input,The user should have already signed up,"1) Enter a non 6 digit verification code
-2) Click on Verify button
-","""12345""","Error message ""Invalid verification code provided, please try again.""","Error message ""Invalid verification code provided, please try again.""",Automated,
-,,tc10_validating the resend verification code button,The user should have already signed up,"1) Click on resend button
-",N/A,The registered mail receives the verification code,,Manual,
-,,tc11_Testing with old verification code,The user should have already signed up,"1) Enter old Verification field
-2) Click on Verify button
-","""198144""","Error message ""Invalid verification code provided, please try again."" comes up",,Manual,
-,,tc12_Testing with valid new verification code,The user should have already signed up,"1) Enter valid verification code received in the email
-2) Click on proceed","""368709""",The user should move to the Welcome page,,Manual,
+Title,Description,Steps,Expected,Priority,Labels,ExternalId
+Welcome page loads,Visitor sees welcome page,"1. Open site\n2. Observe hero section","Hero section and CTA visible",P2,"onboarding,ui",ONB-001
+Signup form validation,Required fields show errors,"1. Open /signup\n2. Click Submit without data","Inline errors for required fields",P1,"onboarding,validation",ONB-002
+Create account (happy path),User can create account,"1. Open /signup\n2. Fill valid data\n3. Submit","Account created and redirected to /dashboard",P1,"onboarding,smoke",ONB-003
+Email verification banner,Unverified users see verify banner,"1. Create account\n2. Skip email verify\n3. Reload","Banner prompts to verify email",P2,"onboarding,ux",ONB-004
+Password strength meter,Meter changes with input,"1. Focus password\n2. Type weak/strong passwords","Strength meter updates accordingly",P3,"onboarding,ux",ONB-005
+Login after signup,New user can log in,"1. Go to /login\n2. Enter new creds\n3. Submit","Dashboard loads",P1,"auth,smoke",ONB-006
+Rate limiting on signup,Block rapid repeated requests,"1. Send >5 signups/min","Requests throttled with 429",P2,"security,rate-limit",ONB-007
+GDPR checkbox enforced,Consent required,"1. Open /signup\n2. Leave GDPR unchecked\n3. Submit","Error prompts to accept terms",P2,"compliance,onboarding",ONB-008
