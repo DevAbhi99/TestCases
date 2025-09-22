@@ -1,8 +1,6 @@
-"Feature: To test the onboarding functionality
-Description: To validate the onboarding process where the User bank account gets linked for the first time to Finely app
-Environment: Dev Environment",,,,,,,,,
 ,,,,,,,,,
-Test Scenario Id,Test Scenario,Test Case,Preconditions,Test Steps,Test Data,Expected Result,Actual Result,Approach,Status
+,,,,,,,,,
+Title,Test Scenario,Test Case,Preconditions,Test Steps,Test Data,Expected Result,Actual Result,Approach,Status
 1,To test the Signup functionality,tc01 Signup with empty inputs fields empty,The user is on the signup page of Finely,"1) Leave all fields empty
 2) check privacy policy and terms and conditions checkboxes
 3) Click on signup",N/A,Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
