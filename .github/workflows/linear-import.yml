@@ -1,4 +1,4 @@
-name: Import CSV test cases to Linear (debug)
+name: Import CSV test cases to Linear (stable)
 
 on:
   push: {}
@@ -8,15 +8,16 @@ jobs:
   import:
     runs-on: ubuntu-latest
     env:
-      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      LINEAR_TEAM_KEY: INT
-      CSV_GLOB: "**/*.csv"     # <— search for CSVs anywhere in the repo
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}   # Add in Repo → Settings → Secrets → Actions
+      LINEAR_TEAM_KEY: INT                            # Change if your team key isn’t INT (e.g., QA, WEB)
+      CSV_GLOB: "testcases/*.csv"                     # Or set to "**/*.csv" to search repo-wide
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show repo tree & config (no secrets)
+        shell: bash
         run: |
           echo "Branch: $GITHUB_REF"
           echo "CSV_GLOB=$CSV_GLOB"
@@ -33,6 +34,25 @@ jobs:
       - name: Install deps
         run: pip install requests
 
+      # OPTIONAL: auto-convert any .xlsx to .csv (uncomment next 2 steps if your files are Excel)
+      # - name: Install Excel deps
+      #   run: pip install pandas openpyxl
+      #
+      # - name: Convert .xlsx → .csv
+      #   shell: bash
+      #   run: |
+      #     python - <<'PY'
+      #     import pathlib, pandas as pd
+      #     for p in pathlib.Path(".").glob("**/*.xlsx"):
+      #         out = p.with_suffix(".csv")
+      #         try:
+      #             df = pd.read_excel(p)
+      #             df.to_csv(out, index=False)
+      #             print(f"Converted {p} -> {out}")
+      #         except Exception as e:
+      #             print(f"WARNING: Failed to convert {p}: {e}")
+      #     PY
+
       - name: Find CSVs
         id: findcsv
         shell: bash
@@ -46,95 +66,111 @@ jobs:
           fi
           printf '%s\n' "${files[@]}" > csv_list.txt
 
-      - name: Import each CSV into Linear
+      - name: Write importer script
         shell: bash
         run: |
-          while IFS= read -r file; do
-            echo "=== Processing $file ==="
-            CSV_PATH="$file" python - <<'PY'
-            import os, csv, time, requests, sys
+          cat > importer.py <<'PY'
+          import os, csv, time, requests, sys
 
-            API = "https://api.linear.app/graphql"
-            KEY = os.environ.get("LINEAR_API_KEY")
-            TEAM_KEY = os.environ.get("LINEAR_TEAM_KEY")
-            CSV_PATH = os.environ.get("CSV_PATH")
+          API = "https://api.linear.app/graphql"
+          KEY = os.environ.get("LINEAR_API_KEY")
+          TEAM_KEY = os.environ.get("LINEAR_TEAM_KEY")
+          CSV_PATH = os.environ.get("CSV_PATH")
 
-            if not KEY:
+          if not KEY:
               print("ERROR: LINEAR_API_KEY secret missing."); sys.exit(1)
-            if not TEAM_KEY:
+          if not TEAM_KEY:
               print("ERROR: LINEAR_TEAM_KEY env not set."); sys.exit(1)
+          if not CSV_PATH:
+              print("ERROR: CSV_PATH env not set."); sys.exit(1)
 
-            H = {"Authorization": KEY, "Content-Type": "application/json"}
+          H = {"Authorization": KEY, "Content-Type": "application/json"}
 
-            def gql(q, v=None):
+          def gql(q, v=None):
               r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
               if r.status_code == 429:
-                time.sleep(2); r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
+                  time.sleep(2)
+                  r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
               r.raise_for_status()
               j = r.json()
               if "errors" in j:
-                raise SystemExit(j["errors"])
+                  raise SystemExit(j["errors"])
               return j["data"]
 
-            # Resolve team ID from key like "INT"
-            d = gql("query($k:String!){ teams(filter:{ key:{ eq:$k } }) { nodes { id key name } } }", {"k": TEAM_KEY})
-            nodes = d["teams"]["nodes"]
-            if not nodes:
-              print(f"ERROR: No Linear team found for key '{TEAM_KEY}'."); sys.exit(1)
-            TEAM_ID = nodes[0]["id"]
+          # Resolve team ID from short key like "INT"
+          d = gql("query($k:String!){ teams(filter:{ key:{ eq:$k } }) { nodes { id key name } } }", {"k": TEAM_KEY})
+          nodes = d["teams"]["nodes"]
+          if not nodes:
+              print(f"ERROR: No Linear team found for key '{TEAM_KEY}'.")
+              sys.exit(1)
+          TEAM_ID = nodes[0]["id"]
 
-            def ensure_labels(s):
-              names = [n.strip() for n in (s or "").split(",")]
+          def ensure_labels(label_str):
+              names = [n.strip() for n in (label_str or "").split(",")]
               ids = []
               for n in names:
-                if not n: continue
-                q = gql("query($n:String!){ issueLabels(filter:{ name:{ eq:$n } }) { nodes { id } } }", {"n": n})
-                if q["issueLabels"]["nodes"]:
-                  ids.append(q["issueLabels"]["nodes"][0]["id"])
-                else:
-                  c = gql("mutation($n:String!){ issueLabelCreate(input:{ name:$n }) { issueLabel { id } } }", {"n": n})
-                  ids.append(c["issueLabelCreate"]["issueLabel"]["id"])
+                  if not n:
+                      continue
+                  q = gql("query($n:String!){ issueLabels(filter:{ name:{ eq:$n } }) { nodes { id } } }", {"n": n})
+                  if q["issueLabels"]["nodes"]:
+                      ids.append(q["issueLabels"]["nodes"][0]["id"])
+                  else:
+                      c = gql("mutation($n:String!){ issueLabelCreate(input:{ name:$n }) { issueLabel { id } } }", {"n": n})
+                      ids.append(c["issueLabelCreate"]["issueLabel"]["id"])
               return ids
 
-            def dup_by_external(ext):
-              if not ext: return None
+          def dup_by_external(ext):
+              if not ext:
+                  return None
               token = f"ExternalId: `{ext}`"
               q = gql("query($q:String!){ issueSearch(query:$q, first:1){ nodes { id identifier } } }", {"q": token})
               nodes = q["issueSearch"]["nodes"]
               return nodes[0]["id"] if nodes else None
 
-            created = skipped = 0
-            with open(CSV_PATH, newline='', encoding="utf-8-sig") as f:
+          created = skipped = 0
+          with open(CSV_PATH, newline='', encoding="utf-8-sig") as f:
               reader = csv.DictReader(f)
               for row in reader:
-                title = (row.get("Title") or "").strip()
-                if not title: print("Skip row (empty Title)"); skipped += 1; continue
+                  title = (row.get("Title") or "").strip()
+                  if not title:
+                      print("Skip row (empty Title)")
+                      skipped += 1
+                      continue
 
-                ext = (row.get("ExternalId") or "").strip()
-                if dup_by_external(ext):
-                  print(f"Skip duplicate ExternalId {ext} ({title})"); skipped += 1; continue
+                  ext = (row.get("ExternalId") or "").strip()
+                  if dup_by_external(ext):
+                      print(f"Skip duplicate ExternalId {ext} ({title})")
+                      skipped += 1
+                      continue
 
-                parts=[]
-                if row.get("Description"): parts.append(row["Description"].strip())
-                if row.get("Steps"): parts.append("### Steps\n" + row["Steps"].replace("\\n","\n"))
-                if row.get("Expected"): parts.append("### Expected Result\n" + row["Expected"].replace("\\n","\n"))
-                if ext: parts.append(f"---\nExternalId: `{ext}`")
-                desc = "\n\n".join(p for p in parts if p) or "Imported from CSV."
+                  parts = []
+                  if row.get("Description"): parts.append(row["Description"].strip())
+                  if row.get("Steps"): parts.append("### Steps\n" + row["Steps"].replace("\\n", "\n"))
+                  if row.get("Expected"): parts.append("### Expected Result\n" + row["Expected"].replace("\\n", "\n"))
+                  if ext: parts.append(f"---\nExternalId: `{ext}`")
+                  desc = "\n\n".join(p for p in parts if p) or "Imported from CSV."
 
-                p = (row.get("Priority") or "").strip().upper()
-                priority = {"P0":0,"0":0,"P1":1,"1":1,"P2":2,"2":2,"P3":3,"3":3}.get(p)
+                  p = (row.get("Priority") or "").strip().upper()
+                  priority = {"P0":0,"0":0,"P1":1,"1":1,"P2":2,"2":2,"P3":3,"3":3}.get(p)
 
-                label_ids = ensure_labels(row.get("Labels", ""))
+                  label_ids = ensure_labels(row.get("Labels", ""))
 
-                inp = {"teamId": TEAM_ID, "title": title, "description": desc}
-                if priority is not None: inp["priority"] = priority
-                if label_ids: inp["labelIds"] = label_ids
+                  inp = {"teamId": TEAM_ID, "title": title, "description": desc}
+                  if priority is not None: inp["priority"] = priority
+                  if label_ids: inp["labelIds"] = label_ids
 
-                r = gql("mutation($i:IssueCreateInput!){ issueCreate(input:$i){ issue{ identifier title url } } }", {"i": inp})
-                issue = r["issueCreate"]["issue"]
-                print(f"CREATED: {issue['identifier']} {issue['title']} -> {issue['url']}")
-                created += 1
+                  r = gql("mutation($i:IssueCreateInput!){ issueCreate(input:$i){ issue{ identifier title url } } }", {"i": inp})
+                  issue = r["issueCreate"]["issue"]
+                  print(f"CREATED: {issue['identifier']} {issue['title']} -> {issue['url']}")
+                  created += 1
 
-            print(f"Summary for {CSV_PATH}: created={created}, skipped={skipped}")
-            PY
+          print(f"Summary for {CSV_PATH}: created={created}, skipped={skipped}")
+          PY
+
+      - name: Import each CSV into Linear
+        shell: bash
+        run: |
+          while IFS= read -r file; do
+            echo "=== Processing $file ==="
+            CSV_PATH="$file" python importer.py
           done < csv_list.txt
