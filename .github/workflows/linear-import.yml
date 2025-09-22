@@ -1,16 +1,16 @@
 name: Import CSV test cases to Linear (debug)
 
 on:
-  push: {}              # runs on any branch push
-  workflow_dispatch:    # allow manual run from Actions tab
+  push: {}
+  workflow_dispatch:
 
 jobs:
   import:
     runs-on: ubuntu-latest
     env:
-      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}   # <-- add in Repo Settings → Secrets → Actions
-      LINEAR_TEAM_KEY: INT                            # <-- change if your team key isn’t INT
-      CSV_GLOB: "testcases/*.csv"                     # <-- imports all CSVs inside testcases/
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      LINEAR_TEAM_KEY: INT
+      CSV_GLOB: "**/*.csv"     # <— search for CSVs anywhere in the repo
 
     steps:
       - name: Checkout
@@ -37,11 +37,11 @@ jobs:
         id: findcsv
         shell: bash
         run: |
-          shopt -s nullglob
+          shopt -s globstar nullglob
           files=($CSV_GLOB)
           echo "Matched files: ${files[*]}"
           if [ ${#files[@]} -eq 0 ]; then
-            echo "ERROR: No CSV files matched '$CSV_GLOB'. Put CSVs in testcases/ or adjust CSV_GLOB."
+            echo "ERROR: No CSV files matched '$CSV_GLOB'. Put CSVs in the repo or adjust CSV_GLOB."
             exit 1
           fi
           printf '%s\n' "${files[@]}" > csv_list.txt
@@ -90,7 +90,7 @@ jobs:
                 if not n: continue
                 q = gql("query($n:String!){ issueLabels(filter:{ name:{ eq:$n } }) { nodes { id } } }", {"n": n})
                 if q["issueLabels"]["nodes"]:
-                  ids.append(q["issueLabels"]["nodes'][0]['id"])
+                  ids.append(q["issueLabels"]["nodes"][0]["id"])
                 else:
                   c = gql("mutation($n:String!){ issueLabelCreate(input:{ name:$n }) { issueLabel { id } } }", {"n": n})
                   ids.append(c["issueLabelCreate"]["issueLabel"]["id"])
