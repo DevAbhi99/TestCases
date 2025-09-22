@@ -1,0 +1,21 @@
+Test Scenario Id,Test Scenario,Test Case,Preconditions,Test Steps,Test Data,Expected Result,Actual Result,Status
+1,To validate login functionality,tc01_To test login with invalid credentials,The user must be on the login page of the website,1) The user provides wrong username,"Username: ""abcd""
+","Get an Error 
+message ""Invalid credentials""","Get an Error 
+message ""Invalid credentials""",
+,,,,2) The user provides wrong password,"Password: ""abcd@1234""",,,
+,,,,3) The user clicks on the get into button,,,,
+,,tc02_To test login with empty credentials,The user must be on the login page of the website,1) The user provides empty username,"Username: "" ""","Get error message ""required"" 
+below both the input fields","Get error message ""required"" 
+below both the input fields",
+,,,,2) The user provides empty password,"Password: "" """,,,
+,,,,3) The user clicks on the get into button,,,,
+,,tc03_To test login with empty credentials,The user must be on the login page of the website,1) The user provides valid username,"Username: ""Admin""",User navigates to the landing page,User navigates to the landing page,
+,,,,2) The user provides valid password,"PAssword: ""Admin123""",,,
+,,,,3) The user clicks on the get into button,,,,
+2,To validate the jobs page,tc04_To validate the job titles page of the website,The user should be logged in already,1) The user clicks on the admin tab,,Job titles get Displayed,Job titles get Displayed,
+,,,,2) The user then clicks on job titles,,,,
+,,,,3)The user then scroll downs and get a screenshot,,,,
+3,To test the logout functionality,tc05_To validate the logout functionality of the website,The user should already be logged in,1) The user clicks on the profile tab,,The user gets logged out,The user gets logged out,
+,,,,2) The user clicks on the logout button,,,,
+,,,,3) The user navigates to the login page and get a screenshot,,,,

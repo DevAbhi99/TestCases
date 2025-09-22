@@ -1,0 +1,58 @@
+"Feature: To test the onboarding functionality
+Description: To validate the onboarding process where the User bank account gets linked for the first time to Finely app
+Environment: Dev Environment",,,,,,,,,
+,,,,,,,,,
+Test Scenario Id,Test Scenario,Test Case,Preconditions,Test Steps,Test Data,Expected Result,Actual Result,Approach,Status
+1,To test the Signup functionality,tc01 Signup with empty inputs fields empty,The user is on the signup page of Finely,"1) Leave all fields empty
+2) check privacy policy and terms and conditions checkboxes
+3) Click on signup",N/A,Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
+,,tc02_Signup with leaving any one field empty,The user is on the signup page of Finely,"1) Fill all fields and leave email field empty
+2) check privacy policy and terms and conditions checkboxes
+3) Click on signup",,Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
+,,tc03_Signup with unchecking check boxes,The user is on the signup page of Finely,"1) Fill all fields 
+2) Leave privacy policy and terms and conditions empty
+3) Click on signup",,Error message "Please check the check box if you want to proceed" comes up,Error message "Please check the check box if you want to proceed" comes up,Automated,
+,,tc04_Signup with with weak password,The user is on the signup page of Finely,"1) Fill all fields with valid inputs
+2) Fill the password and confirm password with a password of length 4
+3) check privacy policy and terms and conditions empty
+4) Click on signup""","""abcd""",Error message "Password did not conform with policy: Password not long enough",Error message "Password did not conform with policy: Password not long enough",Automated,
+,,"tc05_Signup with inputs in password and confirm 
+password fields not matching with each other",The user is on the signup page of Finely,"1) Fill all fields with valid inputs
+2) Fill the password and confirm password such that both the inputs should not match
+3) check privacy policy and terms and conditions empty
+4) Click on signup","password: ""abcd@123456""
+confirm password: ""abc@123456""
+",Error message "Passwords do not match" comes up,Error message "Passwords do not match" comes up,Automated,
+,,tc06_Signup with invalid email format,The user is on the signup page of Finely,"1) Fill email field with incorrect email format
+2) Fill rest of the fields with valid input
+3) check privacy policy and terms and conditions empty
+4) Click on signup""","""abc,sdd""
+""abc.com""
+""abcd@com""",Error message prompting to put the correct email shows up,Error message prompting to put the correct email shows up,Automated,
+,,tc07_Signup with with valid inputs,The user is on the signup page of Finely,"1) Fill all the fields with correct inputs
+2) check privacy policy and terms and conditions empty
+3) Click on signup""","email: ""abhigyan.khaund@narrative.com""
+password: ""Abhi@/1234""
+Confirm password"": ""Abhi@/1234""
+Name: ""Abhigyan""
+Last name: ""Khaund""
+Business name:- ""finley""",User should be navigated to the Welcome page,User should be navigated to the Welcome page,Automated,
+2,To test Verification code page,tc08_Test with empty verification input,The user should have already signed up,"1) Leave the verification code field empty
+2) 2) Click on Verify button
+","email: ""abhigyan.khaund@narrative.com""
+password: ""Abhi@/1234""
+Confirm password"": ""Abhi@/1234""
+Name: ""Abhigyan""
+Last name: ""Khaund""
+Business name:- ""finley""
+Verification Code : N/A",Error message "Please fill out this field message" comes up,Error message "Please fill out this field message" comes up,Automated,
+,,tc09_Testing with incorrect verification input,The user should have already signed up,"1) Enter a non 6 digit verification code
+2) Click on Verify button
+","""12345""","Error message ""Invalid verification code provided, please try again.""","Error message ""Invalid verification code provided, please try again.""",Automated,
+,,tc10_validating the resend verification code button,The user should have already signed up,"1) Click on resend button
+",N/A,The registered mail receives the verification code,,Manual,
+,,tc11_Testing with old verification code,The user should have already signed up,"1) Enter old Verification field
+2) Click on Verify button
+","""198144""","Error message ""Invalid verification code provided, please try again."" comes up",,Manual,
+,,tc12_Testing with valid new verification code,The user should have already signed up,"1) Enter valid verification code received in the email
+2) Click on proceed","""368709""",The user should move to the Welcome page,,Manual,
