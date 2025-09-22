@@ -1,120 +1,174 @@
-- name: Write importer script
-  shell: bash
-  run: |
-    cat > importer.py <<'PY'
-    import os, csv, time, requests, sys, re
+name: Import CSV test cases to Linear (stable)
 
-    API = "https://api.linear.app/graphql"
-    KEY = os.environ.get("LINEAR_API_KEY")
-    TEAM_KEY = os.environ.get("LINEAR_TEAM_KEY")
-    CSV_PATH = os.environ.get("CSV_PATH")
+on:
+  push: {}
+  workflow_dispatch:
 
-    if not KEY:  print("ERROR: LINEAR_API_KEY secret missing."); sys.exit(1)
-    if not TEAM_KEY: print("ERROR: LINEAR_TEAM_KEY env not set."); sys.exit(1)
-    if not CSV_PATH: print("ERROR: CSV_PATH env not set."); sys.exit(1)
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}   # add in Repo → Settings → Secrets → Actions
+      LINEAR_TEAM_KEY: INT                            # change if your team key isn’t INT
+      CSV_GLOB: "**/*.csv"                     # or "**/*.csv" to search repo-wide
 
-    H = {"Authorization": KEY, "Content-Type": "application/json"}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    def gql(q, v=None):
-        r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
-        if r.status_code == 429:
-            time.sleep(2); r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
-        r.raise_for_status()
-        j = r.json()
-        if "errors" in j: raise SystemExit(j["errors"])
-        return j["data"]
+      - name: Show repo tree & config (no secrets)
+        shell: bash
+        run: |
+          echo "Branch: $GITHUB_REF"
+          echo "CSV_GLOB=$CSV_GLOB"
+          echo "LINEAR_TEAM_KEY=$LINEAR_TEAM_KEY"
+          echo "Has LINEAR_API_KEY? -> $([[ -n "${LINEAR_API_KEY}" ]] && echo YES || echo NO)"
+          ls -R
 
-    # Resolve team
-    d = gql("query($k:String!){ teams(filter:{ key:{ eq:$k } }) { nodes { id key name } } }", {"k": TEAM_KEY})
-    nodes = d["teams"]["nodes"]
-    if not nodes: print(f"ERROR: No Linear team found for key '{TEAM_KEY}'."); sys.exit(1)
-    TEAM_ID = nodes[0]["id"]
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    TITLE_ALIASES = {"title","test case","testcase","test scenario","name","summary","case title"}
+      - name: Install deps
+        run: pip install requests
 
-    def norm_key(k: str) -> str:
-        k = re.sub(r'^\ufeff','', k or '').strip().lower()
-        if k in TITLE_ALIASES: return "Title"
-        mapping = {
-          "description":"Description","steps":"Steps","expected":"Expected",
-          "priority":"Priority","labels":"Labels","externalid":"ExternalId","external id":"ExternalId"
-        }
-        return mapping.get(k, k)
+      - name: Find CSVs
+        id: findcsv
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=($CSV_GLOB)
+          echo "Matched files: ${files[*]}"
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "ERROR: No CSV files matched '$CSV_GLOB'. Put CSVs in the repo or adjust CSV_GLOB."
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}" > csv_list.txt
 
-    def normalize_row(raw):
-        return { norm_key(k): v for k,v in raw.items() if k is not None }
+      - name: Write importer script
+        shell: bash
+        run: |
+          cat > importer.py <<'PY'
+          import os, csv, time, requests, sys, re
 
-    def ensure_labels(label_str):
-        if not label_str: return []
-        names = [n.strip() for n in str(label_str).split(",") if n.strip()]
-        ids = []
-        for n in names:
-            q = gql("query($n:String!){ issueLabels(filter:{ name:{ eq:$n } }) { nodes { id } } }", {"n": n})
-            ns = q["issueLabels"]["nodes"]
-            if ns: ids.append(ns[0]["id"])
-            else:
-                c = gql("mutation($n:String!){ issueLabelCreate(input:{ name:$n }) { issueLabel { id } } }", {"n": n})
-                ids.append(c["issueLabelCreate"]["issueLabel"]["id"])
-        return ids
+          API = "https://api.linear.app/graphql"
+          KEY = os.environ.get("LINEAR_API_KEY")
+          TEAM_KEY = os.environ.get("LINEAR_TEAM_KEY")
+          CSV_PATH = os.environ.get("CSV_PATH")
 
-    # NEW: de-dupe without deprecated issueSearch
-    def dup_by_external(ext):
-        if not ext: return None
-        token = f"ExternalId: `{ext}`"
-        q = gql(
-            """
-            query($token:String!) {
-              issues(first: 1, filter: { description: { contains: $token } }) {
-                nodes { id identifier }
+          if not KEY:  print("ERROR: LINEAR_API_KEY secret missing."); sys.exit(1)
+          if not TEAM_KEY: print("ERROR: LINEAR_TEAM_KEY env not set."); sys.exit(1)
+          if not CSV_PATH: print("ERROR: CSV_PATH env not set."); sys.exit(1)
+
+          H = {"Authorization": KEY, "Content-Type": "application/json"}
+
+          def gql(q, v=None):
+              r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
+              if r.status_code == 429:
+                  time.sleep(2); r = requests.post(API, headers=H, json={"query": q, "variables": v or {}})
+              r.raise_for_status()
+              j = r.json()
+              if "errors" in j: raise SystemExit(j["errors"])
+              return j["data"]
+
+          # Resolve team ID from key like "INT"
+          d = gql("query($k:String!){ teams(filter:{ key:{ eq:$k } }) { nodes { id key name } } }", {"k": TEAM_KEY})
+          nodes = d["teams"]["nodes"]
+          if not nodes: print(f"ERROR: No Linear team found for key '{TEAM_KEY}'."); sys.exit(1)
+          TEAM_ID = nodes[0]["id"]
+
+          TITLE_ALIASES = {"title","test case","testcase","test scenario","name","summary","case title"}
+
+          def norm_key(k: str) -> str:
+              k = re.sub(r'^\ufeff','', k or '').strip().lower()
+              if k in TITLE_ALIASES: return "Title"
+              mapping = {
+                "description":"Description","steps":"Steps","expected":"Expected",
+                "priority":"Priority","labels":"Labels","externalid":"ExternalId","external id":"ExternalId"
               }
-            }
-            """,
-            {"token": token},
-        )
-        ns = q["issues"]["nodes"]
-        return ns[0]["id"] if ns else None
+              return mapping.get(k, k)
 
-    # Read CSV
-    with open(CSV_PATH, newline='', encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        print("Columns seen:", reader.fieldnames)
-        created = skipped = 0
+          def normalize_row(raw):
+              return { norm_key(k): v for k,v in raw.items() if k is not None }
 
-        for i, raw in enumerate(reader, start=1):
-            row = normalize_row(raw)
+          def ensure_labels(label_str):
+              if not label_str: return []
+              names = [n.strip() for n in str(label_str).split(",") if n.strip()]
+              ids = []
+              for n in names:
+                  q = gql("query($n:String!){ issueLabels(filter:{ name:{ eq:$n } }) { nodes { id } } }", {"n": n})
+                  ns = q["issueLabels"]["nodes"]
+                  if ns: ids.append(ns[0]["id"])
+                  else:
+                      c = gql("mutation($n:String!){ issueLabelCreate(input:{ name:$n }) { issueLabel { id } } }", {"n": n})
+                      ids.append(c["issueLabelCreate"]["issueLabel"]["id"])
+              return ids
 
-            title = (row.get("Title") or "").strip()
-            if not title:
-                for key in ["Test Case", "Test Scenario", "Name", "Summary"]:
-                    v = (row.get(key) or "").strip()
-                    if v:
-                        title = v; break
-            if not title:
-                print(f"Skip row #{i} (empty Title)"); skipped += 1; continue
+          # De-dupe using issues(filter: ...) (issueSearch is deprecated)
+          def dup_by_external(ext):
+              if not ext: return None
+              token = f"ExternalId: `{ext}`"
+              q = gql(
+                  """
+                  query($token:String!) {
+                    issues(first: 1, filter: { description: { contains: $token } }) {
+                      nodes { id identifier }
+                    }
+                  }
+                  """,
+                  {"token": token},
+              )
+              ns = q["issues"]["nodes"]
+              return ns[0]["id"] if ns else None
 
-            ext = (str(row.get("ExternalId") or "").strip())
-            if dup_by_external(ext):
-                print(f"Skip duplicate ExternalId {ext} ({title})"); skipped += 1; continue
+          created = skipped = 0
+          with open(CSV_PATH, newline='', encoding="utf-8-sig") as f:
+              reader = csv.DictReader(f)
+              print("Columns seen:", reader.fieldnames)
+              for i, raw in enumerate(reader, start=1):
+                  row = normalize_row(raw)
 
-            parts=[]
-            if row.get("Description"): parts.append(str(row["Description"]).strip())
-            if row.get("Steps"): parts.append("### Steps\n" + str(row["Steps"]).replace("\\n","\n"))
-            if row.get("Expected"): parts.append("### Expected Result\n" + str(row["Expected"]).replace("\\n","\n"))
-            if ext: parts.append(f"---\nExternalId: `{ext}`")
-            desc = "\n\n".join(p for p in parts if p) or "Imported from CSV."
+                  title = (row.get("Title") or "").strip()
+                  if not title:
+                      for key in ["Test Case", "Test Scenario", "Name", "Summary"]:
+                          v = (row.get(key) or "").strip()
+                          if v:
+                              title = v; break
+                  if not title:
+                      print(f"Skip row #{i} (empty Title)"); skipped += 1; continue
 
-            p = str(row.get("Priority") or "").strip().upper()
-            priority = {"P0":0,"0":0,"P1":1,"1":1,"P2":2,"2":2,"P3":3,"3":3}.get(p)
-            label_ids = ensure_labels(row.get("Labels", ""))
+                  ext = (str(row.get("ExternalId") or "").strip())
+                  if dup_by_external(ext):
+                      print(f"Skip duplicate ExternalId {ext} ({title})"); skipped += 1; continue
 
-            inp = {"teamId": TEAM_ID, "title": title, "description": desc}
-            if priority is not None: inp["priority"] = priority
-            if label_ids: inp["labelIds"] = label_ids
+                  parts=[]
+                  if row.get("Description"): parts.append(str(row["Description"]).strip())
+                  if row.get("Steps"): parts.append("### Steps\n" + str(row["Steps"]).replace("\\n","\n"))
+                  if row.get("Expected"): parts.append("### Expected Result\n" + str(row["Expected"]).replace("\\n","\n"))
+                  if ext: parts.append(f"---\nExternalId: `{ext}`")
+                  desc = "\n\n".join(p for p in parts if p) or "Imported from CSV."
 
-            r = gql("mutation($i:IssueCreateInput!){ issueCreate(input:$i){ issue{ identifier title url } } }", {"i": inp})
-            issue = r["issueCreate"]["issue"]
-            print(f"CREATED: {issue['identifier']} {issue['title']} -> {issue['url']}")
-            created += 1
+                  p = str(row.get("Priority") or "").strip().upper()
+                  priority = {"P0":0,"0":0,"P1":1,"1":1,"P2":2,"2":2,"P3":3,"3":3}.get(p)
+                  label_ids = ensure_labels(row.get("Labels", ""))
 
-    print(f"Summary for {CSV_PATH}: created={created}, skipped={skipped}")
-    PY
+                  inp = {"teamId": TEAM_ID, "title": title, "description": desc}
+                  if priority is not None: inp["priority"] = priority
+                  if label_ids: inp["labelIds"] = label_ids
+
+                  r = gql("mutation($i:IssueCreateInput!){ issueCreate(input:$i){ issue{ identifier title url } } }", {"i": inp})
+                  issue = r["issueCreate"]["issue"]
+                  print(f"CREATED: {issue['identifier']} {issue['title']} -> {issue['url']}")
+                  created += 1
+
+          print(f"Summary for {CSV_PATH}: created={created}, skipped={skipped}")
+          PY
+
+      - name: Import each CSV into Linear
+        shell: bash
+        run: |
+          while IFS= read -r file; do
+            echo "=== Processing $file ==="
+            CSV_PATH="$file" python importer.py
+          done < csv_list.txt
